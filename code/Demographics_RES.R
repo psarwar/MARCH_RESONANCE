@@ -1,3 +1,7 @@
+# Demographic Data Scavenging for the RESONANCE dataset
+## contains the calculation of breastfeeding and eczema + other parameters
+## at the whole community and sequencing levels cross-sectionally for infants < 1yr
+
 # occasionally might need to clear environment for sanity
 rm(list =ls())
 
@@ -18,8 +22,7 @@ Sys.setenv(VROOM_CONNECTION_SIZE=2000073)
 # calculate child age in months from the column age of months and days on the assessment
 metadata <- read.csv("./raw_data_res/Prioty_Data_013023.csv") %>%
   mutate(studyID = str_pad(.$studyID, 4, pad = "0")) %>% #easier format of studyIDs for joins
-  mutate(childAgeMonths = assessmentAgeMonths +
-           round(assessmentAgeDays/30.417, digits = 0)) %>% # calculate child age in months
+  mutate(childAgeMonths = assessmentAgeMonths + round(assessmentAgeDays/30.417, digits = 0)) %>% # calculate child age in months
   select_all(~gsub("RedCap_Ess_CPH_Air_Inf..|Redcap_Ess_CPH_Air_EC..|Redcap_Ess_CPH_Air_MC..|Redcap_Ess_CPH_Air_Adol..|BasicFamilyAndChild..", "", .))
 
 ## Find the cross-sectional sequenced community infants < 1 year
@@ -202,11 +205,17 @@ B_Past <- feeding$cfh_01 == 2 | feeding$cfh_06 == 1 | feeding$cfh_12c %in% numbe
 
 
 ## Solids Conditionals
-S_Present <- feeding$ifp_d05 == 1 | feeding$ifp_d06h1 == 1 | feeding$ifp_d06i1 == 1 | 
+S_Present_Yes <- feeding$ifp_d05 == 1 | feeding$ifp_d06h1 == 1 | feeding$ifp_d06i1 == 1 | 
   feeding$ifp_d06j1 == 1 | feeding$ifp_d06k1 == 1 | feeding$ifp_d06l1 == 1 | 
   feeding$ifp_d06m1 == 1 | feeding$ifp_d06n1 == 1 | feeding$ifp_d06o1 == 1 | 
   feeding$ifp_d06p1 == 1 | feeding$ifp_d02 == 1 | feeding$ifp_d03 == 1 | feeding$ifp_d04 == 1 | 
   feeding$solidFood =="Yes"
+
+S_Present_No <- feeding$ifp_d05 == 2 | feeding$ifp_d06h1 == 2 | feeding$ifp_d06i1 == 2 | 
+  feeding$ifp_d06j1 == 2 | feeding$ifp_d06k1 == 2 | feeding$ifp_d06l1 == 2 | 
+  feeding$ifp_d06m1 == 2 | feeding$ifp_d06n1 == 2 | feeding$ifp_d06o1 == 2 | 
+  feeding$ifp_d06p1 == 2 | feeding$ifp_d02 == 2 | feeding$ifp_d03 == 2 | feeding$ifp_d04 == 2 | 
+  feeding$solidFood =="No"
   
 
 S_Past <- feeding$cfh_12h %in% number_list | feeding$cfh_12i %in% number_list | 
@@ -216,11 +225,11 @@ S_Past <- feeding$cfh_12h %in% number_list | feeding$cfh_12i %in% number_list |
   feeding$cfh_12r %in% number_list | feeding$cfh_12s %in% number_list | 
   feeding$cfh_12t %in% number_list | feeding$cfh_12u %in% number_list 
 
-# Whole Community
-## feed_present: the feed count
-## feed_past:
-## feed_past_studyid:
-## feedtype: 
+## feed_present: the breastfeeding data from current info forms like infant feeding practices and breastfeeding Still
+## feed_past: the breastfeeding data from older retractively filled forms like complementary feeding history and Breastfeeding Done
+## feed_past_studyid: Feeding information from the retroactively filled form applied to all timepoints in the studyID
+## feedtype: breast feeding information for a timepoint of a studyID compiling current information and retroactive information
+## feed_solid: solid food info
 
 feeding <- feeding %>% 
   mutate(feed_present = case_when(A_Present == TRUE & B_Present == TRUE ~ "Mixed",
@@ -232,64 +241,132 @@ feeding <- feeding %>%
                                     any(feed_past == "FormulaFed") ~ "FormulaFed",
                                     any(feed_past == "BreastFed") ~ "BreastFed")) %>% ungroup() %>%
   mutate(feedtype = ifelse(!is.na(feed_present), feed_present, 
-                           ifelse(!is.na(feed_past), feed_past, feed_past_studyid)))
-
+                           ifelse(!is.na(feed_past), feed_past, feed_past_studyid)),
+         feed_solid = case_when(S_Present_Yes == TRUE | S_Past == TRUE ~ "Yes",
+                               S_Present_No == TRUE ~ "No") ) ## DO NOT add S_Past == FALSE this is a MCQ based question so false =/= no
+## feeding counts
 ## Whole Community
-feeding_1yr <- left_join(metadata_1yr, feeding, by = c("studyID", "timepoint")) %>%
-  select(studyID, timepoint, feedtype)
-# count
-feeding_1yr %>% count(feedtype)
+comm_metadata <- feeding %>% select(studyID, timepoint, feed_present, feed_past, 
+                                    feed_past_studyid, feedtype, feed_solid) %>%
+  left_join(comm_metadata, ., by = c("studyID", "timepoint"))
+comm_metadata %>% count(feedtype)
+comm_metadata %>% count(feed_solid)
 
-## Sequenced Community
-feedtype_seq <- left_join(sequenced_pruned, feeding, by = c("studyID", "timepoint")) %>%
-  select(sample, studyID, timepoint, feedtype)
-#count
-feedtype_seq %>% count(feedtype)
+# Sequenced community
+seq_metadata <- feeding %>% select(studyID, timepoint, feed_present, feed_past, 
+                                   feed_past_studyid, feedtype, feed_solid) %>%
+  left_join(seq_metadata, ., by = c("studyID", "timepoint"))
+seq_metadata %>% count(feedtype)
+seq_metadata %>% count(feed_solid)
 
 #### Other Infant Metric ####
-# Age
-## Whole Community
+## Age
+# Whole Community
+mean(comm_metadata$childAgeMonths, na.rm = TRUE) # # mean infant age in months
+mean(comm_metadata$childAgeMonths, na.rm = TRUE)*30.417 # mean infant age in days
+sum(!is.na(comm_metadata$childAgeMonths)) # the number of samples for which we have ages 
+comm_metadata %>% filter(childAgeMonths <= 3) %>% nrow() # no. of sample <= 3mo
+comm_metadata %>% filter(childAgeMonths > 3 & childAgeMonths <= 6 ) %>% nrow() # no. of samples b/w 3 and 6 mo
+comm_metadata %>% filter(childAgeMonths > 6) %>% nrow() # no. of samples b/w 6 and < 13 mo
+
+# Sequenced
 # Days
-mean(metadata_1yr$assessmentAgeMonths*30.417 + metadata_1yr$assessmentAgeDays)
+mean(seq_metadata$childAgeMonths, na.rm = TRUE) # mean infant age in months
+mean(seq_metadata$childAgeMonths, na.rm = TRUE)*30.417 # mean infant age in days
+sum(!is.na(seq_metadata$childAgeMonths)) # the number of samples for which we have ages 
+seq_metadata %>% filter(childAgeMonths <= 3) %>% nrow() # no. of sample <= 3mo
+seq_metadata %>% filter(childAgeMonths > 3 & childAgeMonths <= 6 ) %>% nrow() # no. of samples b/w 3 and 6 mo
+seq_metadata %>% filter(childAgeMonths > 6) %>% nrow() # no. of samples b/w 6 and < 13 mo
 
-
-age_months # mean infant age in months
-age_months*30.417 # mean infant age in days
-metadata_1yr %>% filter(childAgeMonths <= 3) %>% nrow() # no. of sample <= 3mo
-metadata_1yr %>% filter(childAgeMonths > 3 & childAgeMonths <= 6 ) %>% nrow() # no. of samples b/w 3 and 6 mo
-metadata_1yr %>% filter(childAgeMonths > 6) %>% nrow() # no. of samples b/w 6 and < 13 mo
-
-## Sequenced
-# Days
-sequenced_pruned$assessmentAgeMonths #*30.417 + sequenced_pruned$assessmentAgeDays)
-
-# Sex
+## Sex
 ## Whole Community
-metadata_1yr %>% count(childGender)
+comm_metadata %>% count(childGender)
 ## Sequenced
-sequenced_pruned %>% count(childGender)
+seq_metadata %>% count(childGender)
 
-# Race 
-check <- metadata_1yr %>% select(contains("Participants.."))
-print(metadata_1yr %>% count(Participants..Merge_Dem_Child_Race), n=22)
-metadata_1yr %>% count(Participants..Merge_Dem_Child_Ethnicity)
+## Race 
+## Need to simplify the various racial categories observedf by running the following
+print(metadata %>% count(Participants..Merge_Dem_Child_Race))
+## Whole community
+comm_metadata <- comm_metadata %>% 
+  rename(infant_race = Participants..Merge_Dem_Child_Race) %>% 
+  mutate(simple_race = case_when(str_detect(infant_race, "\n") | infant_race == "Mixed Race" ~ "Mixed",
+                                 infant_race == "Asian "| infant_race == "Other Asian" ~ "Asian", # the space after Asian is not a typo
+                                 infant_race == "White" ~ "White",
+                                 infant_race == "Black or African American" ~ "Black",
+                                 infant_race == "American Indian or Alaska Native" ~ "American Indian",
+                                 infant_race == "Some other race"| infant_race == "Unknown" ~ "Other"))
+comm_metadata %>% count(simple_race)    
+## Sequenced
+seq_metadata <- seq_metadata %>% 
+  rename(infant_race = Participants..Merge_Dem_Child_Race) %>% 
+  mutate(simple_race = case_when(str_detect(infant_race, "\n") | infant_race == "Mixed Race" ~ "Mixed",
+                                 infant_race == "Asian "| infant_race == "Other Asian" ~ "Asian",
+                                 infant_race == "White" ~ "White",
+                                 infant_race == "Black or African American" ~ "Black",
+                                 infant_race == "American Indian or Alaska Native" ~ "American Indian",
+                                 infant_race == "Some other race"| infant_race == "Unknown" ~ "Other"))
+seq_metadata %>% count(simple_race) 
 
-test <- metadata_1yr %>% rename(race = Participants..Merge_Dem_Child_Race) %>%
-  mutate(simple_race = case_when(str_detect(race, "Asian|Other Asian") ~ "Asian"))
-    
-test %>% count(simple_race)    
-    
-    all_race == "American Indian or Alaska Native" 
-                                 ~ "American Indian", 
-                                 all_race == "Asian|Other Asian" ~ "Asian",
-                                 all_race == "Black or African American" ~ "Black",
-                                 all_race == "Mixed Race" ~ "Mixed Race",
-                                 all_race == "Some other race" ~ "Other",
-                                 all_race == "White" ~ "White"))
-test %>% count(simple_race)
-# Height
+## Height
+# Whole Community
+mean(comm_metadata$childHei_cm, na.rm = TRUE)
+mean(comm_metadata$childHeight, na.rm = TRUE) # in inches
+sum(!is.na(comm_metadata$childHei_cm)) # the number of samples for which we have height
+sum(!is.na(comm_metadata$childHeight))
+#Sequenced
+mean(seq_metadata$childHei_cm, na.rm = TRUE)
+mean(seq_metadata$childHeight, na.rm = TRUE) # in inches
+sum(!is.na(seq_metadata$childHei_cm)) # the number of seq samples for which we have height
+sum(!is.na(seq_metadata$childHeight))
 
-# Weight
+## Weight
+# Whole Community
+mean(comm_metadata$childWei_kg, na.rm = TRUE)*100 # in grams
+mean(comm_metadata$childWeight, na.rm = TRUE) # in pounds
+sum(!is.na(comm_metadata$childWei_kg)) # the number of samples for which we have weight
+sum(!is.na(comm_metadata$childWeight))
+#Sequenced
+mean(seq_metadata$childWei_kg, na.rm = TRUE)*100 # in grams
+mean(seq_metadata$childWeight, na.rm = TRUE) # in inches
+sum(!is.na(seq_metadata$childWei_kg)) # the number of seq samples for which we have weight
+sum(!is.na(seq_metadata$childWeight))
+
+#### Maternal/Pregnancy/Delivery Metrics ####
+## 
+# Delivery..GBS = Did the mother receive an antibiotic during labor for GBS?
+# Delivery..birthType = Was the delivery vaginal or cesarean?
+# Delivery..birthAssistance = Was the delivery assisted by a vacuum and/or forceps?
+# From the current PMCI forms
+# Redcap_Ess_Prg_PMCI..pmci_c5 = Did you have an infection in your uterus/womb during labor for which they gave you antibiotics?
+# Redcap_Ess_Prg_PMCI..pmci_c6___1 = Vaginal Birth
+# Redcap_Ess_Prg_PMCI..pmci_c6___2 = C-section
+# Redcap_Ess_Prg_PMCI..pmci_c6a: Was the birth assisted? [1=Forceps; 2=vacuum; 3=both]
+# Redcap_Ess_Prg_PMCI..pmci_g06a : Did you receive IV antibiotics during labor?
+
+## Antibiotics During Labor
+test <- comm_metadata %>% 
+  mutate(abx_labor = case_when(Delivery..GBS == "Yes" | Redcap_Ess_Prg_PMCI..pmci_c5 == 1 | Redcap_Ess_Prg_PMCI..pmci_g06a == 1   ~ "Yes",
+                               Delivery..GBS == "No" | Redcap_Ess_Prg_PMCI..pmci_c5 == 2 | Redcap_Ess_Prg_PMCI..pmci_g06a == 2 ~ "No"))
+## Delivery
+test <- comm_metadata %>% 
+  mutate(delivery = case_when(Delivery..birthType == "Vaginal" | Redcap_Ess_Prg_PMCI..pmci_c6___1 == 1 ~ "Vaginal",
+                              Delivery..birthType == "Cesarean" | Redcap_Ess_Prg_PMCI..pmci_c6___2 == 1 ~ "Cesarean"))
+
+# Assistance Type During Delivery
+table(test$delivery)
+
+
+#### Social Metadata ####
+## Childcare
+
+## Pets
+
+comm_metadata %>% count(Pets..currently)
+comm_metadata %>% count(Pets..petType)
+comm_metadata %>% mutate(pet_catdog = case_when(Pets..petType == "Cat" ~ "Cat",
+                                                Pets..petType == "Dog" ~ "Dog"))
+
 #### Checking that I have the SAMPLEIDs from all MGX runs ####
 # The following confirmed I have all the samples we have sequenced as of April 2023
 # it calls in its own raw data instead of building off previous wrangling sections
