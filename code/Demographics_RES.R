@@ -73,12 +73,6 @@ seq_studyID <- seq_cross$studyID
 comm_metadata <- metadata_1yr %>% filter(!studyID %in% seq_studyID) %>%
   full_join(. , seq_metadata)
 
-#### Export all the relevant metadata ####
-# 'raw' metadata for the whole community <1yr
-write_csv(seq_metadata)
-# 'raw' metadata for the seqeunced community <1yr
-write_csv(comm_metadata)
-
 #### Eczema incidence by study ID at any timepoint ####
 ## Since we are making use of longitudinal data we need to start from the whole metadata sheet ##
 
@@ -259,6 +253,22 @@ seq_metadata <- feeding %>% select(studyID, timepoint, feed_present, feed_past,
 seq_metadata %>% count(feedtype)
 seq_metadata %>% count(feed_solid)
 
+## Breastfeeding exposure
+# Whole community
+test <- comm_metadata %>% rename(bf_percent = BreastfeedingStill..breastFedPercent) %>%
+  mutate(feed_exposure = case_when(bf_percent == 100 ~ "100% breastfeeding",
+                                   bf_percent >= 80 ~ ">=80%", bf_percent > 50 ~ "50-80%",
+                                   bf_percent == 50 ~ "50%", bf_percent > 20 ~ "20-50%",
+                                   bf_percent > 0 ~ "<=20%", bf_percent == 0 ~ "100% formmulafeeding"))
+test %>% count(feed_exposure)
+# Sequenced community
+seq_metadata <- seq_metadata %>% rename(bf_percent = BreastfeedingStill..breastFedPercent) %>%
+  mutate(feed_exposure = case_when(bf_percent == 100 ~ "100% breastfeeding",
+                                   bf_percent >= 80 ~ ">=80%", bf_percent > 50 ~ "50-80%",
+                                   bf_percent == 50 ~ "50%", bf_percent > 20 ~ "20-50%",
+                                   bf_percent > 0 ~ "<=20%", bf_percent == 0 ~ "100% formmulafeeding"))
+seq_metadata %>% count(feed_exposure)
+
 #### Other Infant Metric ####
 ## Age
 # Whole Community
@@ -332,8 +342,9 @@ mean(seq_metadata$childWeight, na.rm = TRUE) # in inches
 sum(!is.na(seq_metadata$childWei_kg)) # the number of seq samples for which we have weight
 sum(!is.na(seq_metadata$childWeight))
 
+
 #### Maternal/Pregnancy/Delivery Metrics ####
-## 
+
 # Delivery..GBS = Did the mother receive an antibiotic during labor for GBS?
 # Delivery..birthType = Was the delivery vaginal or cesarean?
 # Delivery..birthAssistance = Was the delivery assisted by a vacuum and/or forceps?
@@ -345,27 +356,166 @@ sum(!is.na(seq_metadata$childWeight))
 # Redcap_Ess_Prg_PMCI..pmci_g06a : Did you receive IV antibiotics during labor?
 
 ## Antibiotics During Labor
-test <- comm_metadata %>% 
+# Whole Community
+comm_metadata <- comm_metadata %>% 
   mutate(abx_labor = case_when(Delivery..GBS == "Yes" | Redcap_Ess_Prg_PMCI..pmci_c5 == 1 | Redcap_Ess_Prg_PMCI..pmci_g06a == 1   ~ "Yes",
                                Delivery..GBS == "No" | Redcap_Ess_Prg_PMCI..pmci_c5 == 2 | Redcap_Ess_Prg_PMCI..pmci_g06a == 2 ~ "No"))
+comm_metadata %>% count(abx_labor)
+# Sequenced
+seq_metadata <- seq_metadata %>% 
+  mutate(abx_labor = case_when(Delivery..GBS == "Yes" | Redcap_Ess_Prg_PMCI..pmci_c5 == 1 | Redcap_Ess_Prg_PMCI..pmci_g06a == 1   ~ "Yes",
+                               Delivery..GBS == "No" | Redcap_Ess_Prg_PMCI..pmci_c5 == 2 | Redcap_Ess_Prg_PMCI..pmci_g06a == 2 ~ "No"))
+seq_metadata %>% count(abx_labor)
+
 ## Delivery
-test <- comm_metadata %>% 
+# Whole Community
+comm_metadata <- comm_metadata %>% 
   mutate(delivery = case_when(Delivery..birthType == "Vaginal" | Redcap_Ess_Prg_PMCI..pmci_c6___1 == 1 ~ "Vaginal",
                               Delivery..birthType == "Cesarean" | Redcap_Ess_Prg_PMCI..pmci_c6___2 == 1 ~ "Cesarean"))
+comm_metadata %>% count(delivery)
+# Sequenced
+seq_metadata <- seq_metadata %>% 
+  mutate(delivery = case_when(Delivery..birthType == "Vaginal" | Redcap_Ess_Prg_PMCI..pmci_c6___1 == 1 ~ "Vaginal",
+                              Delivery..birthType == "Cesarean" | Redcap_Ess_Prg_PMCI..pmci_c6___2 == 1 ~ "Cesarean"))
+seq_metadata %>% count(delivery)
 
-# Assistance Type During Delivery
-table(test$delivery)
+## Assistance Type During Delivery
+### This has been abandoned due to poor metadata availability
+# Whole Community
+test <- comm_metadata %>% 
+  mutate(delivery_ass = case_when(Delivery..birthAssistance == "Forceps"| Redcap_Ess_Prg_PMCI..pmci_c6a == 1 ~ "Forceps",
+                                  Delivery..birthAssistance == "Vacuum"| Redcap_Ess_Prg_PMCI..pmci_c6a == 2 ~ "Vacuum",
+                                  Delivery..birthAssistance == "Forceps\nVacuum"| Redcap_Ess_Prg_PMCI..pmci_c6a == 3 ~ "Both"))
+table(test$delivery_ass)
 
+## Maternal Education
+## Whole Community
+comm_metadata <- comm_metadata %>% 
+  rename(mateduc = Participants..Merge_Dem_Mom_Education) %>%
+  mutate(mateduc_grp = 
+           case_when(
+             mateduc == "Professional or Doctorate Degree (PhD, EdD, MD, JD)" ~ "professional/doctorate",
+             mateduc == "8th grade or less" ~ "8th grade or less",
+             mateduc == "Associate's degree (AA, AS)" ~ "associates",
+             mateduc == "Bachelor's degree (BA, BS)" ~ "bachelors",
+             mateduc == "Master's degree (MA, MS, MEd, MSW, MBA, MPH)" ~ "masters",
+             str_detect(mateduc, "GED or equivalent|High School Graduate|High school degree") ~ "high school/GED",
+             mateduc == "Partial College or Specialized Training" ~ "partial college/special training",
+             mateduc == "Some college, no degree" ~ "college, no degree",
+             str_detect(mateduc, "Partial High School|Some high school, no degree") ~ "high school, no degree",
+             mateduc == "College Graduate" ~ "bachelors"))
+comm_metadata %>% count(mateduc_grp)
 
+## Sequenced Community
+test <- seq_metadata %>% 
+  rename(mateduc = Participants..Merge_Dem_Mom_Education) %>%
+  mutate(mateduc_grp = 
+           case_when(
+             mateduc == "Professional or Doctorate Degree (PhD, EdD, MD, JD)" ~ "professional/doctorate",
+             mateduc == "8th grade or less" ~ "8th grade or less",
+             mateduc == "Associate's degree (AA, AS)" ~ "associates",
+             mateduc == "Bachelor's degree (BA, BS)" ~ "bachelors",
+             mateduc == "Master's degree (MA, MS, MEd, MSW, MBA, MPH)" ~ "masters",
+             str_detect(mateduc, "GED or equivalent|High School Graduate|High school degree") ~ "high school/GED",
+             mateduc == "Partial College or Specialized Training" ~ "partial college/special training",
+             mateduc == "Some college, no degree" ~ "college, no degree",
+             str_detect(mateduc, "Partial High School|Some high school, no degree") ~ "high school, no degree",
+             mateduc == "College Graduate" ~ "bachelors"))
+test %>% count(mateduc_grp)
 #### Social Metadata ####
 ## Childcare
+# no relevant columns in the ChildcareStatic form
+# relevant columns from Childcare Dyanmic form
+metadata %>% count(ChildcareDynamic..daycareOutsideHome)
+metadata %>% count(ChildcareDynamic..familyMemberTakeCare) # non-parental family member and nanny
+metadata %>% count(ChildcareDynamic..stayAtHomeParent) # is there a stay at home parent in the household
+
+#EarlyCare Education form logs hours of the time of childcare used
+# Q1 and 2 ask about daycare and Q6-11 ask about private care by sibling/nanny etc
+## Whole community
+comm_metadata <- comm_metadata %>%
+  mutate(childcare_daycare = case_when(EarlyCareEducation..Q1 > 0 | EarlyCareEducation..Q2 > 0 ~ "Yes"),
+         childcare_private = case_when(EarlyCareEducation..Q6 > 0 | EarlyCareEducation..Q7 > 0 |
+           EarlyCareEducation..Q8 > 0 | EarlyCareEducation..Q9 > 0 | 
+           EarlyCareEducation..Q10 > 0 | EarlyCareEducation..Q11 > 0 ~ "Yes")) %>%
+  mutate(daycare = case_when(ChildcareDynamic..daycareOutsideHome == "Yes" & 
+                               ChildcareDynamic..familyMemberTakeCare == "Yes" ~ "Mixed",
+                             childcare_daycare == "Yes" & childcare_private == "Yes" ~ "Mixed",
+                             ChildcareDynamic..daycareOutsideHome == "Yes" | 
+                               childcare_daycare == "Yes" ~ "Daycare",
+                             ChildcareDynamic..familyMemberTakeCare == "Yes" |
+                               childcare_private == "Yes" ~ "Private"))
+comm_metadata %>% count(daycare)
+
+## Sequenced community
+seq_metadata <- seq_metadata %>%
+  mutate(childcare_daycare = case_when(EarlyCareEducation..Q1 > 0 | EarlyCareEducation..Q2 > 0 ~ "Yes"),
+         childcare_private = case_when(EarlyCareEducation..Q6 > 0 | EarlyCareEducation..Q7 > 0 |
+                                         EarlyCareEducation..Q8 > 0 | EarlyCareEducation..Q9 > 0 | 
+                                         EarlyCareEducation..Q10 > 0 | EarlyCareEducation..Q11 > 0 ~ "Yes")) %>%
+  mutate(daycare = case_when(ChildcareDynamic..daycareOutsideHome == "Yes" & 
+                               ChildcareDynamic..familyMemberTakeCare == "Yes" ~ "Mixed",
+                             childcare_daycare == "Yes" & childcare_private == "Yes" ~ "Mixed",
+                             ChildcareDynamic..daycareOutsideHome == "Yes" | 
+                               childcare_daycare == "Yes" ~ "Daycare",
+                             ChildcareDynamic..familyMemberTakeCare == "Yes" |
+                               childcare_private == "Yes" ~ "Private"))
+seq_metadata %>% count(daycare)
+
+## Siblings
+# the number of children living in the household
+FamilyInformation..numberChildren > 1 # the number of children including the child of interest
+HouseholdComposition..NumberChildren > 0 # the number of additional children with child of interest
+Redcap_Ess_Dem_HHC_C..hhc_c_02a1 #the number of additional children currently living with the child
+metadata %>% count(Redcap_Ess_Dem_HHC_C..hhc_c_02a1)
+## Whole Community
+comm_metadata <- comm_metadata %>%
+  mutate(household_children = case_when(Redcap_Ess_Dem_HHC_C..hhc_c_02a1 == 0 |
+                                          FamilyInformation..numberChildren <= 1 |
+                                          HouseholdComposition..NumberChildren == 0 ~ "No",
+                                        FamilyInformation..numberChildren > 1 |
+                                          HouseholdComposition..NumberChildren > 0 |
+                                          Redcap_Ess_Dem_HHC_C..hhc_c_02a1 > 0 ~ "Yes"))
+comm_metadata %>% count(household_children)  
+## Seq Community
+seq_metadata <- seq_metadata %>%
+  mutate(household_children = case_when(Redcap_Ess_Dem_HHC_C..hhc_c_02a1 == 0 |
+                                          FamilyInformation..numberChildren <= 1 |
+                                          HouseholdComposition..NumberChildren == 0 ~ "No",
+                                        FamilyInformation..numberChildren > 1 |
+                                          HouseholdComposition..NumberChildren > 0 |
+                                          Redcap_Ess_Dem_HHC_C..hhc_c_02a1 > 0 ~ "Yes"))
+seq_metadata %>% count(household_children)
 
 ## Pets
+## Whole Community
+comm_metadata <- comm_metadata %>% 
+  mutate(pet_type = case_when(Pets..petType == "Cat" ~ "Cat",
+                                Pets..petType == "Dog" ~ "Dog",
+                             str_detect(Pets..petType, 
+                                        "Axolotl|Bearded Dragon|Beta Fish|Bird|Bunny|Chinchilla|Fish|Reptile") ~ "Other")) %>%
+  mutate(pet_own = case_when(str_detect(pet_type, "Cat|Dog|Other") ~ "Yes"))
 
-comm_metadata %>% count(Pets..currently)
-comm_metadata %>% count(Pets..petType)
-comm_metadata %>% mutate(pet_catdog = case_when(Pets..petType == "Cat" ~ "Cat",
-                                                Pets..petType == "Dog" ~ "Dog"))
+comm_metadata %>% count(pet_own)
+comm_metadata %>% count(pet_type)
+
+## Seq Community
+seq_metadata <- seq_metadata %>% 
+  mutate(pet_type = case_when(Pets..petType == "Cat" ~ "Cat",
+                              Pets..petType == "Dog" ~ "Dog",
+                              str_detect(Pets..petType, 
+                                         "Axolotl|Bearded Dragon|Beta Fish|Bird|Bunny|Chinchilla|Fish|Reptile") ~ "Other")) %>%
+  mutate(pet_own = case_when(str_detect(pet_type, "Cat|Dog|Other") ~ "Yes"))
+
+seq_metadata %>% count(pet_own)
+seq_metadata %>% count(pet_type)
+
+#### Export all the relevant metadata ####
+# metadata corresponding to the demograpics table for the whole community <1yr
+comm_mdexport <-
+write_csv(seq_metadata)
+# 'raw' metadata for the seqeunced community <1yr
+write_csv(comm_metadata)
 
 #### Checking that I have the SAMPLEIDs from all MGX runs ####
 # The following confirmed I have all the samples we have sequenced as of April 2023
