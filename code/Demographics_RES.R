@@ -255,12 +255,12 @@ seq_metadata %>% count(feed_solid)
 
 ## Breastfeeding exposure
 # Whole community
-test <- comm_metadata %>% rename(bf_percent = BreastfeedingStill..breastFedPercent) %>%
+comm_metadata <- comm_metadata %>% rename(bf_percent = BreastfeedingStill..breastFedPercent) %>%
   mutate(feed_exposure = case_when(bf_percent == 100 ~ "100% breastfeeding",
                                    bf_percent >= 80 ~ ">=80%", bf_percent > 50 ~ "50-80%",
                                    bf_percent == 50 ~ "50%", bf_percent > 20 ~ "20-50%",
                                    bf_percent > 0 ~ "<=20%", bf_percent == 0 ~ "100% formmulafeeding"))
-test %>% count(feed_exposure)
+comm_metadata %>% count(feed_exposure)
 # Sequenced community
 seq_metadata <- seq_metadata %>% rename(bf_percent = BreastfeedingStill..breastFedPercent) %>%
   mutate(feed_exposure = case_when(bf_percent == 100 ~ "100% breastfeeding",
@@ -407,7 +407,7 @@ comm_metadata <- comm_metadata %>%
 comm_metadata %>% count(mateduc_grp)
 
 ## Sequenced Community
-test <- seq_metadata %>% 
+seq_metadata <- seq_metadata %>% 
   rename(mateduc = Participants..Merge_Dem_Mom_Education) %>%
   mutate(mateduc_grp = 
            case_when(
@@ -421,14 +421,14 @@ test <- seq_metadata %>%
              mateduc == "Some college, no degree" ~ "college, no degree",
              str_detect(mateduc, "Partial High School|Some high school, no degree") ~ "high school, no degree",
              mateduc == "College Graduate" ~ "bachelors"))
-test %>% count(mateduc_grp)
+seq_metadata %>% count(mateduc_grp)
 #### Social Metadata ####
 ## Childcare
 # no relevant columns in the ChildcareStatic form
-# relevant columns from Childcare Dyanmic form
-metadata %>% count(ChildcareDynamic..daycareOutsideHome)
-metadata %>% count(ChildcareDynamic..familyMemberTakeCare) # non-parental family member and nanny
-metadata %>% count(ChildcareDynamic..stayAtHomeParent) # is there a stay at home parent in the household
+# relevant columns from Childcare Dynamic form
+ChildcareDynamic..daycareOutsideHome
+ChildcareDynamic..familyMemberTakeCare # non-parental family member and nanny
+ChildcareDynamic..stayAtHomeParent # is there a stay at home parent in the household
 
 #EarlyCare Education form logs hours of the time of childcare used
 # Q1 and 2 ask about daycare and Q6-11 ask about private care by sibling/nanny etc
@@ -511,11 +511,24 @@ seq_metadata %>% count(pet_own)
 seq_metadata %>% count(pet_type)
 
 #### Export all the relevant metadata ####
-# metadata corresponding to the demograpics table for the whole community <1yr
-comm_mdexport <-
-write_csv(seq_metadata)
-# 'raw' metadata for the seqeunced community <1yr
-write_csv(comm_metadata)
+# metadata corresponding to the demographics table for the whole community <1yr
+comm_mdexport <- comm_metadata %>% 
+  select(sample, studyID, timepoint, childAgeMonths, childGender, infant_race, 
+         simple_race, childHeight, childHei_cm, childWeight, childWei_kg,
+         eczema, eczema_studyID, feed_present, feed_past, feed_past_studyid, 
+         feedtype, feed_solid, feed_exposure, delivery, abx_labor, mateduc_grp,
+         childcare_daycare, childcare_private, daycare, household_children, 
+         pet_own, pet_type)
+write_csv(comm_mdexport, "./metadata_exports/commdem_resmd.csv")
+# metadata corresponding to the demographics table for the sequenced community <1yr
+seq_mdexport <- seq_metadata %>% 
+  select(sample, studyID, timepoint, childAgeMonths, childGender, infant_race, 
+         simple_race, childHeight, childHei_cm, childWeight, childWei_kg,
+         eczema, eczema_studyID, feed_present, feed_past, feed_past_studyid, 
+         feedtype, feed_solid, feed_exposure, delivery, abx_labor, mateduc_grp,
+         childcare_daycare, childcare_private, daycare, household_children, 
+         pet_own, pet_type)
+write_csv(seq_mdexport, "./metadata_exports/seqdem_resmd.csv")
 
 #### Checking that I have the SAMPLEIDs from all MGX runs ####
 # The following confirmed I have all the samples we have sequenced as of April 2023

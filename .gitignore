@@ -39,15 +39,12 @@ vignettes/*.pdf
 .Renviron
 
 # .DS_Store file should be ignored since its only relevant for local use
-
 .DS_Store
 
 #kneaddata logs
-
 kneaddata_logs/
 
 # Work Logs/CheckList
-
 progress_tracking_files/
 
 # raw data files
