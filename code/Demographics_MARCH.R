@@ -279,7 +279,7 @@ bb_length_md <- sif_data %>% select(specimen_ID, bb_length) %>%
 bb_length_md <- bb_length_md[-c(45,89,307,425),]
 bb_length_md$bb_length <- as.numeric(bb_length_md$bb_length)
 ## Sequenced
-test <- bb_length_md %>% left_join(metadata_seq, . , by = "specimen_ID") %>%
+metadata_seq <- bb_length_md %>% left_join(metadata_seq, . , by = "specimen_ID") %>%
   distinct(SAMPLEID, .keep_all=TRUE) # duplicate specimen_IDs for some
 
 # Baby Weight
@@ -343,7 +343,7 @@ pets <- metadata_3mo %>% select("SAMPLEID", starts_with("PETS"), -PETS_SPEC) %>%
          pet_cat = case_when(PETS_TYPE_CATS == 1 ~ "Yes"),
          pet_dog = case_when(PETS_TYPE_DOGS == 1 ~ "Yes"),
          pet_other = case_when(PETS_TYPE_OTHER == 1 ~ "Yes"))
-
+#Sequenced Community
 metadata_seq <- pets %>% select(SAMPLEID, pet_owned, pet_cat, pet_dog, pet_other) %>%
   left_join(metadata_seq, ., by = "SAMPLEID")
 
@@ -359,7 +359,8 @@ metadata_seq <- sibling %>% select(SAMPLEID, mother_id, sibling) %>%
   left_join(metadata_seq, ., by = c("SAMPLEID", "mother_id")) 
 
 #### General Metadata Calculations - Miscellaneous ####
-
+## The following piece of code was not used to calculate breastfeeding information
+## Extra piece I wrote to calculate ages but is no longer relevant
 # Calculate the age of the baby when milk [direct breast or expressed] was started and stopped
 metadata_bf <- metadata_3mo %>% 
   mutate(BRST_BBSTART_AGE_MONTHS = case_when(BRST_BBSTART_AGE_UNIT == 1 ~ round(BRST_BBSTART_AGE/30.417, digit = 2),
@@ -533,9 +534,33 @@ maternal_educ %>% count(maternal_education)
 metadata_seq %>% count(maternal_education)
 
 #### Master Metadata File/ Other types of metadata file ####
-## make one metadata file with relevant columns for ease of publishing raw data
+## Whole community
+wholecomm_3mo_md <- metadata_bf_ec %>%
+  left_join(., sex, by = c("mother_id", "SAMPLEID")) %>% 
+  left_join(., race, by = "SAMPLEID") %>%
+  left_join(., non_mixedrace, by = c("SAMPLEID", "MIXED_RACE")) %>%
+  left_join(., preg_meds, by = c("mother_id", "SAMPLEID")) %>%
+  left_join(., childcare, by = c("mother_id", "SAMPLEID")) %>%
+  left_join(., pets, by = "SAMPLEID" ) %>%
+  left_join(., sibling, by = c("mother_id", "SAMPLEID")) %>%
+  left_join(., delivery, by = c("mother_id", "SAMPLEID")) %>%
+  left_join(., maternal_educ, by = c("mother_id", "SAMPLEID")) %>%
+  left_join(., ld_abx, by = c("mother_id", "SAMPLEID")) %>%
+  select(mother_id, SAMPLEID, eczema, feedtype, SEX, MIXED_RACE,
+         race, abx_preg, steroid_preg, DELIVERY, DELIVERY_EXT, LD_ANTIBIOTICS,
+         childcare, sibling, EDUC_LVL, maternal_education,
+         pet_owned, pet_cat, pet_dog, pet_other)
+write_csv(wholecomm_3mo_md, file = "./metadata_exports/commdem_march3momd.csv")
+
+## sif data and any other data classified by specimen_ID have duplicates IDs
+## these "duplicates" are not real duplicates but does indeed signify separate babies [as far as Prioty can tell]
+test_sif <- sif_data %>% select(specimen_ID, feed_exposure) %>%
+  left_join(., bb_diet, by = "specimen_ID")
+bb_weight_md %>% select(specimen_ID, total_weight_lbs, total_weight_grams)
+bb_diet
+## Sequenced Community
+# make one metadata file with relevant columns for ease of publishing raw data
 # metadata_seq is the master metadata table
 # it has been made with multiple joins as each metadata was collected
 # march had too many raw data sheets and ID types to make one master sheet first
-
-write_csv(metadata_seq, file = "./processed/march_seq_metadata_allvar.csv")
+write_csv(metadata_seq, file = "./metadata_exports/seqdem_marchmd.csv")
