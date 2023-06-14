@@ -62,38 +62,90 @@ setdiff(vec3, vec2)
 ## For the final analysis get rid of samples 71; 166; 144; 193 from the vkc metaphlan outputsß
 
 
-#### Import in raw data ####
+#### Import in raw data/metadata ####
 # Merge all outputs from metaphlan using a metaphlan subscript
 # merge_metaphlan_tables.py *_profile.tsv > MARCH_merged_ab_table.tsv
 
 ## Call in the metadata
-# Call in the two abundance tables
-res_ab <- read_tsv("./raw_data_res/seq_res_mergedab.tsv", skip=1)
+# Call in the two merged abundance tables
+res_relab <- read_tsv("./raw_data_res/res_merged_relab.tsv", skip=1)
 #the following dont have samples 71; 144; 166, 193
-march_ab <- read_tsv("./raw_data_march/march_mergedab.tsv", skip = 1)
+march_relab <- read_tsv("./raw_data_march/march_merged_relab.tsv", skip = 1)
 
-filenames <- read_csv("./raw_data_res/filenames.csv", col_names = FALSE) %>%
-  separate(X1, into = c("sample", NA), sep = "_" , remove = FALSE) %>%
-  mutate(seqname = str_replace_all(X1, "_profile.tsv", "")) %>% select(-X1)
+## Call in the crosswalk file between the old and new filenames
+# biospecimen: old seauence name
+# uid : new sequence name
+# filename: new sequence name with well information
+# S_well: well number
+filename_code <- read_csv("./old_new_seqID_mgx.csv")
 
-res_md <- read_csv("./processed/metadata_res_seq.csv") %>% 
-  left_join(., filenames, by = "sample") %>%
-  rename(eczema = eczema_studyID, child_age_month = childAgeMonths) %>%
-  mutate(feedtype_breastfed = case_when(feedtype == "Mixed"|feedtype == "FormulaFed" ~ "Other",
-                                        TRUE ~ as.character(feedtype)),
-         feedtype_formulafed = case_when(feedtype == "Mixed"|feedtype == "BreastFed" ~ "Other",
-                                        TRUE ~ as.character(feedtype)),
-         feedtype_mixed = case_when(feedtype == "FormulaFed"|feedtype == "BreastFed" ~ "Other",
-                                    TRUE ~ as.character(feedtype)))
+## Call in the metadata for the sequenced samples
+# Use only the sequences identified in the metadata files
+# they are the quality controlled cross-sectional samples (see: Demographics_RES/MARCH code files for details)
+res_md <- read_csv("./metadata_exports/seqdem_resmd.csv") 
+march_md <- read_csv("./metadata_exports/seqdem_marchmd.csv") %>%
+  mutate(biospecimen = str_replace_all(seqname, "_S.*", ""))
 
-march_md <- read_csv("./processed/march_seq_metadata_allvar.csv") %>%
-  rename(child_id = SAMPLEID, sample = specimen_ID) %>%
-  mutate(feedtype_breastfed = case_when(feedtype == "Mixed"|feedtype == "FormulaFed" ~ "Other",
-                                        TRUE ~ as.character(feedtype)),
-         feedtype_formulafed = case_when(feedtype == "Mixed"|feedtype == "BreastFed" ~ "Other",
-                                          TRUE ~ as.character(feedtype)),
-         feedtype_mixed = case_when(feedtype == "FormulaFed"|feedtype == "BreastFed" ~ "Other",
-                                    TRUE ~ as.character(feedtype)))
+# Call in the metadata for the whole community samples including those not sequenced
+res_wholemd <- read_csv("./metadata_exports/commdem_resmd.csv")
+march_wholemd <- read_csv("./metadata_exports/commdem_march3momd.csv")
+
+# Find the new sequence IDs for our MARCH and RESONANCE dataset
+res_md <- filename_code %>% 
+  select(uid, filename, biospecimen, S_well) %>% 
+  rename(sample = biospecimen) %>%
+  left_join(res_md, ., by = "sample")
+
+march_md <- filename_code %>% 
+  select(uid, filename, biospecimen, S_well) %>%
+  distinct(biospecimen, .keep_all = TRUE) %>%
+  left_join(march_md, ., by = "biospecimen")
+
+## list of uid
+sample_uid <- c(res_md$filename,march_md$filename)
+sample_uid <- paste(sample_uid, "_profile.tsv", sep = "")
+writeLines(sample_uid, con = "new_filenames_march_res.txt")
+
+## list of MARCH uids
+march_uid <- c(march_md$filename)
+march_uid <- paste(march_uid, "_profile.tsv ./march_metaphlan_profiles", sep = "")
+march_uid <- paste("mv ./", march_uid, sep = "")
+writeLines(march_uid, con = "move_marchfiles.txt")
+
+####Chi^2 Test of Breastfeeding by Eczema at the Whole Community Level####
+## MARCH
+march_bfec <- table(march_wholemd$feedtype, march_wholemd$eczema)
+chisq.test(march_bfec)
+#vcdExtra ordinal chi^2
+CMHtest(Feed_Eczema_Table)
+
+
+
+
+
+
+
+
+
+
+##Whole Community
+Feed_Eczema_Table <- table(march_wholemd$feedtype, MARCH_3mos_Trunc_BF$ECZEMA_CHILD_cat)
+#Base R - chi^2
+chisq.test(MARCH_3mos_Trunc_BF$FeedType, MARCH_3mos_Trunc_BF$ECZEMA_CHILD_cat, correct = FALSE)
+chisq.test(Feed_Eczema_Table, correct = FALSE)
+#vcdExtra ordinal chi^2
+CMHtest(Feed_Eczema_Table)
+#BreastFeeding Only
+MARCH_BF_Chi2 <- MARCH_3mos_Trunc_BF %>% 
+  mutate(BreastFeed = case_when(FeedType == "BreastFed" ~ "BreastFed", 
+                                FeedType == "Mixed" ~ "NotBreastFed", 
+                                FeedType == "FormulaFed" ~ "NotBreastFed"))
+
+BF_Eczema_Table <- table(MARCH_BF_Chi2$BreastFeed, MARCH_BF_Chi2$ECZEMA_CHILD_cat)
+#Base R
+chisq.test(BF_Eczema_Table, correct = FALSE)
+#vcdExtra ordinal chi^2
+CMHtest(BF_Eczema_Table)
 
 #### Bray Curtis Distance and PERMANOVA ####
 
