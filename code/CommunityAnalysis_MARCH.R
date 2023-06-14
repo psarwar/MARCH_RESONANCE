@@ -10,6 +10,7 @@ library(vegan)
 library(tidyverse)
 library(broom)
 library(ggrepel)
+library(vcdExtra)
 
 #### Resolve Tengfei's QC issue ####
 # Tengfei reported some samples as having low QC
@@ -103,8 +104,8 @@ march_md <- filename_code %>%
 
 ## list of uid
 sample_uid <- c(res_md$filename,march_md$filename)
-sample_uid <- paste(sample_uid, "_profile.tsv", sep = "")
-writeLines(sample_uid, con = "new_filenames_march_res.txt")
+sample_uid <- paste(sample_uid, ".sam.bz2", sep = "")
+writeLines(sample_uid, con = "deniz_samfiles.txt")
 
 ## list of MARCH uids
 march_uid <- c(march_md$filename)
@@ -113,11 +114,53 @@ march_uid <- paste("mv ./", march_uid, sep = "")
 writeLines(march_uid, con = "move_marchfiles.txt")
 
 ####Chi^2 Test of Breastfeeding by Eczema at the Whole Community Level####
+# Make new breastfeeding vs. non breastfeeding column
+march_wholemd <- march_wholemd %>% 
+  mutate(feedtype = ordered(feedtype, levels = c("BreastFed", "Mixed", "FormulaFed"))) %>%
+  mutate(breastfeed_type = 
+           case_when(feedtype == "Mixed" | feedtype == "FormulaFed" ~ "Non-BreastFed", 
+                     feedtype == "BreastFed" ~ "BreastFed"))
+
+res_wholemd <- res_wholemd %>% 
+  mutate(feedtype = ordered(feedtype, levels = c("BreastFed", "Mixed", "FormulaFed"))) %>%
+  mutate(breastfeed_type = 
+           case_when(feedtype == "Mixed" | feedtype == "FormulaFed" ~ "Non-BreastFed", 
+                     feedtype == "BreastFed" ~ "BreastFed"))
+
+## RESONANCE + MARCH
+marchres_wholemd <- march_wholemd %>% rename (sample = SAMPLEID) %>%
+  full_join(res_wholemd, .)
+
+#breast vs mixed vs formula
+marchres_feedec <- table(marchres_wholemd$feedtype, marchres_wholemd$eczema)
+chisq.test(marchres_feedec)
+CMHtest(marchres_feedec)
+
+# breast vs non-breast
+marchres_bfec <- table(marchres_wholemd$breastfeed_type, marchres_wholemd$eczema)
+chisq.test(marchres_bfec)
+
+## RESONANCE
+#breast vs mixed vs formula
+res_feedec <- table(res_wholemd$feedtype, res_wholemd$eczema)
+chisq.test(res_feedec)
+CMHtest(res_feedec)
+
+# breast vs non-breast
+res_bfec <- table(res_wholemd$breastfeed_type, res_wholemd$eczema)
+chisq.test(res_bfec)
+
 ## MARCH
-march_bfec <- table(march_wholemd$feedtype, march_wholemd$eczema)
+#feedtype
+march_feedec <- table(march_wholemd$feedtype, march_wholemd$eczema)
+chisq.test(march_feedec)
+CMHtest(march_feedec)
+
+# breastfed vs non breastfed
+march_bfec <- table(march_wholemd$breastfeed_type, march_wholemd$eczema)
 chisq.test(march_bfec)
-#vcdExtra ordinal chi^2
-CMHtest(Feed_Eczema_Table)
+
+####Relative abundance of HMO metabolizers in the two cohorts ####
 
 
 
@@ -126,26 +169,6 @@ CMHtest(Feed_Eczema_Table)
 
 
 
-
-
-##Whole Community
-Feed_Eczema_Table <- table(march_wholemd$feedtype, MARCH_3mos_Trunc_BF$ECZEMA_CHILD_cat)
-#Base R - chi^2
-chisq.test(MARCH_3mos_Trunc_BF$FeedType, MARCH_3mos_Trunc_BF$ECZEMA_CHILD_cat, correct = FALSE)
-chisq.test(Feed_Eczema_Table, correct = FALSE)
-#vcdExtra ordinal chi^2
-CMHtest(Feed_Eczema_Table)
-#BreastFeeding Only
-MARCH_BF_Chi2 <- MARCH_3mos_Trunc_BF %>% 
-  mutate(BreastFeed = case_when(FeedType == "BreastFed" ~ "BreastFed", 
-                                FeedType == "Mixed" ~ "NotBreastFed", 
-                                FeedType == "FormulaFed" ~ "NotBreastFed"))
-
-BF_Eczema_Table <- table(MARCH_BF_Chi2$BreastFeed, MARCH_BF_Chi2$ECZEMA_CHILD_cat)
-#Base R
-chisq.test(BF_Eczema_Table, correct = FALSE)
-#vcdExtra ordinal chi^2
-CMHtest(BF_Eczema_Table)
 
 #### Bray Curtis Distance and PERMANOVA ####
 
