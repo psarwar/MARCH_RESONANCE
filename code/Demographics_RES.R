@@ -211,7 +211,6 @@ S_Present_No <- feeding$ifp_d05 == 2 | feeding$ifp_d06h1 == 2 | feeding$ifp_d06i
   feeding$ifp_d06p1 == 2 | feeding$ifp_d02 == 2 | feeding$ifp_d03 == 2 | feeding$ifp_d04 == 2 | 
   feeding$solidFood =="No"
   
-
 S_Past <- feeding$cfh_12h %in% number_list | feeding$cfh_12i %in% number_list | 
   feeding$cfh_12l %in% number_list | feeding$cfh_12m %in% number_list | 
   feeding$cfh_12n %in% number_list | feeding$cfh_12o %in% number_list |
@@ -233,16 +232,27 @@ feeding <- feeding %>%
   group_by(studyID) %>% arrange(timepoint, .by_group = TRUE) %>%
   mutate(feed_past_studyid = case_when(any(feed_past == "Mixed") ~ "Mixed", #yes need to come first to override conflicting No
                                     any(feed_past == "FormulaFed") ~ "FormulaFed",
-                                    any(feed_past == "BreastFed") ~ "BreastFed")) %>% ungroup() %>%
-  mutate(feedtype = ifelse(!is.na(feed_present), feed_present, 
-                           ifelse(!is.na(feed_past), feed_past, feed_past_studyid)),
+                                    any(feed_past == "BreastFed") ~ "BreastFed")) %>% 
+  ungroup() %>%
+  mutate(feedtype = case_when(feed_present == "BreastFed" ~ "BreastFed",
+                              feed_present == "FormulaFed" ~ "FormulaFed",
+                              feed_present == "Mixed" ~ "Mixed",
+                              feed_past == "BreastFed" ~ "BreastFed",
+                              feed_past == "FormulaFed" ~ "FormulaFed",
+                              feed_past == "Mixed" ~ "Mixed",
+                              feed_past_studyid == "BreastFed" ~ "BreastFed",
+                              feed_past_studyid == "FormulaFed" ~ "FormulaFed",
+                              feed_past_studyid == "Mixed" ~ "Mixed"),
          feed_solid = case_when(S_Present_Yes == TRUE | S_Past == TRUE ~ "Yes",
-                               S_Present_No == TRUE ~ "No") ) ## DO NOT add S_Past == FALSE this is a MCQ based question so false =/= no
+                                S_Present_No == TRUE ~ "No")) ## DO NOT add S_Past == FALSE this is a MCQ based question so false =/= no
+                              
+
 ## feeding counts
 ## Whole Community
 comm_metadata <- feeding %>% select(studyID, timepoint, feed_present, feed_past, 
                                     feed_past_studyid, feedtype, feed_solid) %>%
-  left_join(comm_metadata, ., by = c("studyID", "timepoint"))
+  left_join(comm_metadata, .)
+
 comm_metadata %>% count(feedtype)
 comm_metadata %>% count(feed_solid)
 
@@ -296,7 +306,7 @@ seq_metadata %>% count(childGender)
 
 ## Race 
 ## Need to simplify the various racial categories observedf by running the following
-print(metadata %>% count(Participants..Merge_Dem_Child_Race))
+#print(metadata %>% count(Participants..Merge_Dem_Child_Race))
 ## Whole community
 comm_metadata <- comm_metadata %>% 
   rename(infant_race = Participants..Merge_Dem_Child_Race) %>% 
@@ -426,10 +436,8 @@ seq_metadata %>% count(mateduc_grp)
 ## Childcare
 # no relevant columns in the ChildcareStatic form
 # relevant columns from Childcare Dynamic form
-ChildcareDynamic..daycareOutsideHome
-ChildcareDynamic..familyMemberTakeCare # non-parental family member and nanny
-ChildcareDynamic..stayAtHomeParent # is there a stay at home parent in the household
-
+#ChildcareDynamic..familyMemberTakeCare # non-parental family member and nanny
+#ChildcareDynamic..stayAtHomeParent # is there a stay at home parent in the household
 #EarlyCare Education form logs hours of the time of childcare used
 # Q1 and 2 ask about daycare and Q6-11 ask about private care by sibling/nanny etc
 ## Whole community
