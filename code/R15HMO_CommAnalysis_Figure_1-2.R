@@ -4,6 +4,7 @@ rm(list =ls())
 
 # load required packages
 library(tidyverse)
+library(ggtext)
 library(viridis)
 library(vegan)
 library(glue)
@@ -50,6 +51,28 @@ p1 <- marchres_wholemd %>% filter(!is.na(eczema)) %>%
 
 ggsave(filename="f1_stacked_bfec.pdf",
        plot = p1,
+       device="pdf",path="./images",
+       width= 5,
+       height=5,
+       units="in",
+       dpi=500)
+
+brks <- c(0, 0.25, 0.5, 0.75, 1)
+
+p1_percentages <- marchres_wholemd %>% filter(!is.na(eczema)) %>%
+  filter(!is.na(feedtype)) %>%
+  mutate(eczema = factor(eczema, levels = c("Yes", "No"))) %>%
+  ggplot(aes(x=eczema, fill = factor(feedtype))) +
+  geom_bar(position = "fill") +
+  scale_fill_viridis(discrete = T) +
+  scale_y_continuous(breaks = brks, labels = scales::percent(brks)) +
+  labs(x="Eczema", y= "Percentage", fill = "Feeding Status") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 18))
+
+ggsave(filename="f1_stacked_bfec_percentages.pdf",
+       plot = p1_percentages,
        device="pdf",path="./images",
        width= 5,
        height=5,
@@ -155,17 +178,18 @@ pcoa_table <- positions %>%
   as_tibble(rownames = "uid") %>%
   full_join(., marchres_md) %>%
   full_join(., relab_uid)
+
 ### Cohort By Age
 p4 <- pcoa_table %>%
   drop_na(child_age_month) %>%
-  ggplot(aes(x=PCoA1, y=PCoA2, shape = cohort)) +
-  geom_point(aes(color = child_age_month), size = 4) +
+  ggplot(aes(x=PCoA1, y=PCoA2, linetype = cohort)) +
+  stat_ellipse() +
+  geom_point(aes(shape = cohort, color = child_age_month), size = 4) +
   scale_color_gradient(low = "#440154FF", high = "#FDE725FF") +
   labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Age (months)") +
-  stat_ellipse() + #FDE725FF
   theme_classic() +
-  theme(axis.text = element_text(size = 20), 
-        axis.title = element_text(size = 25))
+  theme(axis.text = element_text(size = 18), 
+        axis.title = element_text(size = 23))
 
 ggsave(filename="f1_pcoa_cohortbyage.pdf",
        plot = p4,
@@ -175,21 +199,82 @@ ggsave(filename="f1_pcoa_cohortbyage.pdf",
        units="in",
        dpi=500)
 
-##Cohort By B.longum relab
-p5 <- pcoa_table %>%
-  rename(b_longum = `k__Bacteria|p__Actinobacteria|c__Actinobacteria|o__Bifidobacteriales|f__Bifidobacteriaceae|g__Bifidobacterium|s__Bifidobacterium_longum`) %>%
-  drop_na(b_longum) %>%
-  ggplot(aes(x=PCoA1, y=PCoA2, shape = cohort)) +
-  geom_point(aes(color = b_longum), size = 4) +
-  scale_color_gradient(low = "#FDE725FF", high = "#800000") +
-  labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Relative Abundance\nB. longum") +
-  stat_ellipse() + 
-  theme_classic() +
-  theme(axis.text = element_text(size = 20), 
-        axis.title = element_text(size = 25))
+### Cohort By Alpha Diversity
 
-ggsave(filename="f1_pcoa_cohortbyblongumrelab.pdf",
+p5 <- pcoa_table %>% left_join(.,marchres_ad) %>%
+  ggplot(aes(x=PCoA1, y=PCoA2)) +
+  geom_point(aes(color = shannon, shape = cohort), size = 4) +
+  scale_color_viridis(option = "magma") +
+  labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Shannon\nDiversity") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 18), 
+        axis.title = element_text(size = 23))
+
+ggsave(filename="sf1_pcoa_cohortbyshannon.pdf",
        plot = p5,
+       device="pdf",path="./images",
+       width= 12,
+       height=10,
+       units="in",
+       dpi=500)
+
+##Cohort By B.longum relab
+p6 <- pcoa_table %>%
+  rename(b_longum = `k__Bacteria|p__Actinobacteria|c__Actinobacteria|o__Bifidobacteriales|f__Bifidobacteriaceae|g__Bifidobacterium|s__Bifidobacterium_longum`) %>%
+  ggplot(aes(x=PCoA1, y=PCoA2)) +
+  geom_point(aes(color = b_longum, shape = cohort), size = 4) +
+  scale_fill_viridis() +
+  labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Relative Abundance\nB. longum") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 18), 
+        axis.title = element_text(size = 23))
+
+ggsave(filename="sf1_pcoa_cohortbyblongumrelab.pdf",
+       plot = p6,
+       device="pdf",path="./images",
+       width= 12,
+       height=10,
+       units="in",
+       dpi=500)
+
+##Cohort By B.breve relab
+p7 <- pcoa_table %>%
+  rename(b_breve = `k__Bacteria|p__Actinobacteria|c__Actinobacteria|o__Bifidobacteriales|f__Bifidobacteriaceae|g__Bifidobacterium|s__Bifidobacterium_breve`) %>%
+  ggplot(aes(x=PCoA1, y=PCoA2, linetype = feedtype)) +
+  geom_point(aes(color = b_breve, shape = cohort), size = 4) +
+  stat_ellipse() +
+  scale_fill_viridis() +
+  labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Relative Abundance\nB. breve") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 18), 
+        axis.title = element_text(size = 23))
+
+ggsave(filename="sf1_pcoa_cohortbybbreverelab_feedtypeellipse.pdf",
+       plot = p7,
+       device="pdf",path="./images",
+       width= 12,
+       height=10,
+       units="in",
+       dpi=500)
+
+## Cohort by feedtype
+
+p8 <- pcoa_table %>%
+  drop_na(feedtype) %>%
+  mutate(feedtype = factor(feedtype, 
+                           levels = c("BreastFed", "Mixed", "FormulaFed"))) %>%
+  ggplot(aes(x=PCoA1, y=PCoA2)) +
+  geom_point(aes(color = feedtype, shape = cohort), size = 4) +
+  #stat_ellipse() +
+  scale_color_viridis(discrete = T) +
+  labs(x = labs[1], y = labs[2], shape = "Cohort", color = "Feeding Status") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 18), 
+        axis.title = element_text(size = 23))
+
+p8
+ggsave(filename="sf1_pcoa_cohortbyfeeding.pdf",
+       plot = p8,
        device="pdf",path="./images",
        width= 12,
        height=10,
@@ -413,25 +498,44 @@ permanova_df_res <- tibble(variable, Df, SumofSqs, R2, `F`, `Pr(>F)`)
 ## Combine all the dataframes
 
 permanova_df <- permanova_df %>%
-  mutate(dataset == "Combined")
+  mutate(dataset = "Combined")
 
 permanova_df_march <- permanova_df_march %>%
-  mutate(dataset == "MARCH")
+  mutate(dataset = "MARCH")
 
 permanova_df_res <- permanova_df_res %>%
-  mutate(dataset == "RESONANCE")
+  mutate(dataset = "RESONANCE")
+
+permanova_combined <- permanova_df %>% 
+  full_join(., permanova_df_march) %>%
+  full_join(., permanova_df_res) %>%
+  mutate(significant = case_when(`Pr(>F)`> 0.05 ~ "No",
+                                 `Pr(>F)`< 0.05 ~ "Yes"))
+
+write_csv(permanova_combined, file = "full_permanova.csv")
 
 ##Bubble Plot
 
-bubble_p <- permanova_df %>%
-  ggplot(data=taxa_metamean2)+ 
-  geom_point(mapping=aes(x = Sample_Day, y = taxon, 
-                         size = abun_mean, color = FullTreatment),
-             stat="identity")+
-  scale_color_manual(values = phy_col)+
+bubble_p <- permanova_combined %>%
+  ggplot(aes(x=dataset, y=variable, size = R2, color = significant))+ 
+  geom_point()+
   labs(y="",x="",colour="",
-       size="Relative Abundance (%)")+
-  theme_bw()+
+       size="R^2 Value")+
+  scale_y_discrete(limits = rev(c("Cohort", "Age", "BreastFed", "BreastFed*Age", 
+                              "Eczema", "Eczema*Age", "Childcare", "Siblings",
+                              "Maternal Education", "Delivery Mode", "Pets"))) +
+  scale_color_manual(values = c("Yes" = "#229954", "No" = "grey")) +
+  theme_classic()
+
+ggsave(filename="f1_permanova_bubble.pdf",
+       plot = bubble_p,
+       device="pdf",path="./images",
+       width= 5,
+       height=5,
+       units="in",
+       dpi=500)
+
+#+
   scale_y_discrete(limits = rev)
 theme(panel.background = element_rect(colour = "black", size=1),
       legend.position="right",
@@ -441,4 +545,84 @@ theme(panel.background = element_rect(colour = "black", size=1),
       axis.text.x=element_text(size=8, angle = 90, vjust = 0.66),
       axis.ticks.x=element_blank());
 
-plot(bubble)
+
+####HMO METABOLIZERS RELATIVE ABUDNANCE####
+
+## Select the columns with only HMO metabolizers
+## list of HMO metabolizers picked from eczema review paper Table 2
+hmo_met <- relab %>%
+  select(-NCBI_tax_id) %>%
+  pivot_longer(cols = -1) %>%
+  pivot_wider(names_from = "clade_name", values_from = "value") %>%
+  separate(name, into = c("uid", NA), sep = "_") %>%
+  select(uid, contains(c("s__Bifidobacterium_bifidum", "s__Bifidobacterium_breve", 
+                         "s__Bifidobacterium_longum", "s__Bifidobacterium_catenulatum",
+                         "s__Bifidobacterium_animalis", "s__Bacteroides_fragilis", 
+                         "s__Lactobacilus_casei", "s__Lactobacilus_acidophilus", 
+                         "s__Escherichia_coli", "s__Klebsiella_pneumoniae", 
+                         "s__Faecalibacterium_prausnitzii", "s__Ruminococcus_gnavus", 
+                         "s__Akkermansia_muciniphila"))) %>%
+  pivot_longer(cols = contains("s__"), names_to = "HMO_metabolizing_bacteria", 
+               values_to = "relab") %>%
+  separate(HMO_metabolizing_bacteria, into = c(NA, "HMO_metabolizing_bacteria"), sep = "s__") %>%
+  left_join(., marchres_md) %>%
+  mutate(feedtype = factor(feedtype, levels = c("BreastFed", "Mixed", "FormulaFed")))
+
+## Relative Abundance Plot 
+relab_eczema_p <- hmo_met %>%
+  drop_na(eczema) %>%
+  filter(relab>0) %>%
+  ggplot(aes(x = HMO_metabolizing_bacteria, y=relab, fill = eczema)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(alpha = 0.5, size = 0.5, 
+             position = position_jitterdodge(jitter.width = 0.3, 
+                                             dodge.width = 0.6, seed = 511)) +
+  labs(x=NULL, y = "Relative Abundance") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2), ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 7, face = "italic"),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 15))
+
+ggsave(filename="f2_relativeabundance_HMOmet.pdf",
+       plot = relab_eczema_p,
+       device="pdf",path="./images",
+       width= 12,
+       height=10,
+       units="in",
+       dpi=500)
+
+## Relative Abundance log transformed plot
+hmo_met_eczema_log <- hmomet_relab_eczema <- hmo_met %>%
+  filter(relab>0, !is.na(eczema)) %>%
+  ggplot(aes(x = HMO_metabolizing_bacteria, y=log(relab), fill = eczema)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(alpha = 0.5, size = 0.5, 
+             position = position_jitterdodge(jitter.width = 0.3, 
+                                             dodge.width = 0.6, seed = 511)) +
+  labs(x=NULL, y = "Relative Abundance (log)") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2), ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 10, face="italic"),
+                                   axis.text.y = element_text(size = 10),
+                                   axis.title = element_text(size = 15))
+
+ggsave(filename="f2_relativeabundance_HMOmet_logtransformed.pdf",
+       plot = hmo_met_eczema_log,
+       device="pdf",path="./images",
+       width= 12,
+       height=10,
+       units="in",
+       dpi=500)
+## Mean Relative Abundance Plot
+hmomet_relab_p <- hmo_met %>% 
+  group_by(cohort, HMO_metabolizing_bacteria) %>% 
+  mutate(HMO_metabolizing_bacteria = str_replace(HMO_metabolizing_bacteria, "_", " ")) %>%
+  reframe(mean_relab = mean(relab)) %>% 
+  ggplot(aes(x=cohort, y= mean_relab, fill = HMO_metabolizing_bacteria)) +
+  geom_col() + 
+  labs(x = NULL, y= "Mean Relative Abundance (%)", fill = "HMO metabolizing bacteria") +
+  theme_classic() +
+  theme(legend.text = element_text(face = "italic"),
+        axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 18))
