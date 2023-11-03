@@ -9,39 +9,36 @@ library(tidyverse)
 library(vegan)
 library(glue)
 
-## Merge metaphlan outputs
-# terminal; env metaphlan; merge_metaphlan_tables.py *_profile.tsv > MARCH_merged_ab_table.tsv
-# couldnt join the RES and MARCH profiles directly because ph metaphlan version issues
-# merged_metaphlan_tables2.py is a separate exec script associated with a version of metaphlan
-# it is in the folder with all the resonance metaphlan profiles
-./merge_metaphlan_tablesv2.py *_profile.tsv > mergedab.tsv
+####Call in input files####
 
-# Call in the two abundance tables
-res_ab <- read_tsv("./raw_data_res/seq_res_mergedab.tsv", skip=1)
-#the following dont have samples 71; 144; 166, 193
-march_ab <- read_tsv("./raw_data_march/march_mergedab.tsv", skip = 1)
+## Call in the taxon relative abundances from metaphlan
+# merge the resonance and march metaphlan outputs from metaphlan v3.1
+# put all profiles in one folder and use metphlans merge tables function/script
+# ./merge_metaphlan_tablesv2.py *_profile.tsv > marchres_merged_relab.tsv
+relab <- read_tsv("./raw_data_mixed/marchres_merged_relab.tsv", skip = 1)
 
-# have samples as rows and taxa as column
-res_trans <- res_ab %>% select(-NCBI_tax_id) %>% pivot_longer(cols = -1) %>%
-  pivot_wider(names_from = "clade_name", values_from = "value") %>%
-  select(name, contains("s__")) 
+## Call in the RESONANCE metadata
+res_md <- read_csv("./metadata_exports/seqdem_resmd.csv")%>% 
+  left_join(., filenames, by = "sample") %>%
+  mutate(cohort = "RES")
 
-march_trans <- march_ab %>% select(-NCBI_tax_id) %>% pivot_longer(cols = -1) %>%
-  pivot_wider(names_from = "clade_name", values_from = "value") %>% 
-  select(name, contains("s__"))
+march_md <- read_csv("./metadata_exports/seqdem_marchmd.csv") %>%
+  rename(child_id = SAMPLEID, sample = specimen_ID) %>%
+  mutate(cohort = "MARCH")
+marchmdful <- full_join(res_md, march_md)
 
-# join and replace all NAs with 0
-marchres_ab <- full_join(res_trans, march_trans) %>%
-  mutate(seqname = str_replace_all(name, "_profile", "")) %>% select(-name) %>%
-  select(seqname, everything())
+marchmdful <- marchmdful %>% select(sample, eczema, feedtype, seqname, cohort)
+res_md %>% filter(cohort == "RES") %>% count(eczema)
+## Call in a merged metadata file
 
 ####Mixed Ordination of MARCH and RESONANCE ####
 ## Calculate Bray-Curtis
-bc_input <- marchres_ab %>%
-  mutate_if(is.numeric, coalesce, 0) %>%
-  column_to_rownames("seqname")
+set.seed(1994)
+bc_input <- relab %>%
+  select(-NCBI_tax_id) %>%
+  column_to_rownames("clade_name")
   
-set.seed(1994) # for reproducibility 
+ # for reproducibility 
 
 # Bray-Curtis Distance calculation
 marchres_bc <- vegdist(bc_input, method = "bray")
@@ -156,3 +153,30 @@ taxon_cohort <- hmo_met %>% group_by(cohort, HMO_met) %>%
 
 
 taxon_cohort
+
+
+#### OLD - Merge metaphlan outputs from different metaphlan versions ####
+# terminal; env metaphlan; merge_metaphlan_tables.py *_profile.tsv > MARCH_merged_ab_table.tsv
+# couldnt join the RES and MARCH profiles directly because ph metaphlan version issues
+# merged_metaphlan_tables2.py is a separate exec script associated with a version of metaphlan
+# it is in the folder with all the resonance metaphlan profiles
+./merge_metaphlan_tablesv2.py *_profile.tsv > mergedab.tsv
+
+# Call in the two abundance tables
+res_ab <- read_tsv("./raw_data_res/seq_res_mergedab.tsv", skip=1)
+#the following dont have samples 71; 144; 166, 193
+march_ab <- read_tsv("./raw_data_march/march_mergedab.tsv", skip = 1)
+
+# have samples as rows and taxa as column
+res_trans <- res_ab %>% select(-NCBI_tax_id) %>% pivot_longer(cols = -1) %>%
+  pivot_wider(names_from = "clade_name", values_from = "value") %>%
+  select(name, contains("s__")) 
+
+march_trans <- march_ab %>% select(-NCBI_tax_id) %>% pivot_longer(cols = -1) %>%
+  pivot_wider(names_from = "clade_name", values_from = "value") %>% 
+  select(name, contains("s__"))
+
+# join and replace all NAs with 0
+marchres_ab <- full_join(res_trans, march_trans) %>%
+  mutate(seqname = str_replace_all(name, "_profile", "")) %>% select(-name) %>%
+  select(seqname, everything())

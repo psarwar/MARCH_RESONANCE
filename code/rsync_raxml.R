@@ -92,5 +92,39 @@ write_lines(files_need, file = "res_missing_samfiles.txt")
 ##rsync for the humann files
 #directory on ada
 /lovelace/sequencing/processed/mgx/humann/main
-rsync -avP ada:/lovelace/sequencing/processed/mgx/humann/main ./
 
+rsync -avP --files-from=./new_filenames_march_res.txt ada:/lovelace/sequencing/processed/mgx/metaphlan ./
+./merge_metaphlan_tablesv2.py *_profile.tsv > marchres_merged_relab.tsv
+
+## get the pathabundance files
+rsync -avP --files-from=./pathabundance_files.txt ada:/lovelace/sequencing/processed/mgx/humann/main ./
+./merge_metaphlan_tablesv2.py *_profile.tsv > marchres_merged_relab.tsv
+rsync -avP --files-from=./pathcoverage.txt ada:/lovelace/sequencing/processed/mgx/humann/main ./
+
+##Join the humann output tables
+humann_join_tables --input /Users/psarwar/VKC_Lab/CodingRelated/MARCH_RESONANCE/humann_pathabundance --output humann_genefamilies.tsv --file_name genefamilies_relab
+
+humann_join_tables --input /Users/psarwar/VKC_Lab/CodingRelated/MARCH_RESONANCE/humann_pathabundance --output humann_pathabundance.tsv --file_name pathabundance
+
+humann_join_tables --input /Users/psarwar/VKC_Lab/CodingRelated/MARCH_RESONANCE/humann_kos --output humann_kos_joined.tsv --file_name kos
+humann_join_tables --input /Users/psarwar/VKC_Lab/CodingRelated/MARCH_RESONANCE/humann_pfams --output humann_pfams_joined.tsv --file_name pfams
+humann_join_tables --input /Users/psarwar/VKC_Lab/CodingRelated/MARCH_RESONANCE/humann_ecs --output humann_ecs_joined.tsv --file_name ecs
+
+
+cp -R
+
+###download all of Deniz new trees
+rsync -avP ada:/home/deniz/Repos/DenizStrains/55hmo_output/RAxML_bestTree.s__Bifidobacterium_infantis.StrainPhlAn3.tre ./
+
+rsync -avP ada:/home/deniz/Repos/DenizStrains/longum_output_allstrains/RAxML_bestTree.s__Bifidobacterium_longum.StrainPhlAn3.tre ./
+
+rsync -avP ada:/home/deniz/Repos/DenizStrains/real_output/RAxML_bestTree.s__Bacteroides_fragilis.StrainPhlAn3.tre ./
+
+rsync -avP ada:/home/deniz/Repos/DenizStrains/real_output/RAxML_bestTree.s__Bifidobacterium_longum.StrainPhlAn3.tre ./
+
+##download regrouped samples
+rsync -avP --files-from=./marchres_filenames_pfam.txt ada:/lovelace/sequencing/processed/mgx/humann/regroup ./
+rsync -avP --files-from=./marchres_filenames_ecs.txt ada:/lovelace/sequencing/processed/mgx/humann/regroup ./
+rsync -avP --files-from=./marchres_filenames_kos.txt ada:/lovelace/sequencing/processed/mgx/humann/regroup ./
+
+tar czvf march.tar.gz ./MARCH_RESONANCE

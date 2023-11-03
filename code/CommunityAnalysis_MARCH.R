@@ -95,12 +95,14 @@ march_wholemd <- read_csv("./metadata_exports/commdem_march3momd.csv")
 res_md <- filename_code %>% 
   select(uid, filename, biospecimen, S_well) %>% 
   rename(sample = biospecimen) %>%
-  left_join(res_md, ., by = "sample")
+  left_join(res_md, ., by = "sample") %>%
+  mutate(cohort = "RESONANCE")
 
 march_md <- filename_code %>% 
   select(uid, filename, biospecimen, S_well) %>%
   distinct(biospecimen, .keep_all = TRUE) %>%
-  left_join(march_md, ., by = "biospecimen")
+  left_join(march_md, ., by = "biospecimen") %>%
+  mutate(cohort = "MARCH")
 
 ## list of uid
 sample_uid <- c(res_md$filename,march_md$filename)
@@ -116,12 +118,14 @@ writeLines(march_uid, con = "move_marchfiles.txt")
 ####Chi^2 Test of Breastfeeding by Eczema at the Whole Community Level####
 # Make new breastfeeding vs. non breastfeeding column
 march_wholemd <- march_wholemd %>% 
+  mutate(cohort = "MARCH") %>%
   mutate(feedtype = ordered(feedtype, levels = c("BreastFed", "Mixed", "FormulaFed"))) %>%
   mutate(breastfeed_type = 
            case_when(feedtype == "Mixed" | feedtype == "FormulaFed" ~ "Non-BreastFed", 
                      feedtype == "BreastFed" ~ "BreastFed"))
 
 res_wholemd <- res_wholemd %>% 
+  mutate(cohort = "RESONANCE") %>%
   mutate(feedtype = ordered(feedtype, levels = c("BreastFed", "Mixed", "FormulaFed"))) %>%
   mutate(breastfeed_type = 
            case_when(feedtype == "Mixed" | feedtype == "FormulaFed" ~ "Non-BreastFed", 
@@ -130,6 +134,17 @@ res_wholemd <- res_wholemd %>%
 ## RESONANCE + MARCH
 marchres_wholemd <- march_wholemd %>% rename (sample = SAMPLEID) %>%
   full_join(res_wholemd, .)
+
+plot1 <- marchres_wholemd %>% filter(!is.na(eczema)) %>%
+  filter(!is.na(feedtype)) %>%
+  ggplot(aes(x=eczema,fill=feedtype)) +
+  geom_bar(position = "dodge") +
+  labs(x="Eczema", y= "No. of samples") +
+  theme_classic() +
+  theme(axis.text = element_text(size = 15), 
+        axis.title = element_text(size = 18))
+
+plot1
 
 #breast vs mixed vs formula
 marchres_feedec <- table(marchres_wholemd$feedtype, marchres_wholemd$eczema)
@@ -161,15 +176,63 @@ march_bfec <- table(march_wholemd$breastfeed_type, march_wholemd$eczema)
 chisq.test(march_bfec)
 
 ####Relative abundance of HMO metabolizers in the two cohorts ####
+res_hmomet <- res_relab %>% 
+  select(-NCBI_tax_id) %>%
+  pivot_longer(cols = -1, names_to = "uid", values_to = "relab") %>%
+  separate(uid, into = c("uid", NA), sep = "_") %>%
+  pivot_wider(names_from = "clade_name", values_from = "relab") %>%
+  select(uid, contains(c("s__Bifidobacterium_bifidum", "s__Bifidobacterium_breve", 
+                    "s__Bifidobacterium_longum", "s__Bifidobacterium_catenulatum",
+                    "s__Bifidobacterium_animalis", "s__Bacteroides_fragilis", 
+                    "s__Lactobacilus_casei", "s__Lactobacilus_acidophilus", 
+                    "s__Escherichia_coli", "s__Klebsiella_pneumoniae", 
+                    "s__Faecalibacterium_prausnitzii", "s__Ruminococcus_gnavus", 
+                    "s__Akkermansia_muciniphila"))) %>%
+  pivot_longer(-1, names_to = "species", values_to = "relab") %>%
+  separate(species, into = c(NA, "species"), sep = "s__") %>%
+  mutate(species = str_replace(species, "_", " ")) %>%
+  left_join(res_md, .)
+
+march_hmomet <- march_relab %>% 
+  select(-NCBI_tax_id) %>%
+  pivot_longer(cols = -1, names_to = "uid", values_to = "relab") %>%
+  separate(uid, into = c("uid", NA), sep = "_") %>%
+  pivot_wider(names_from = "clade_name", values_from = "relab") %>%
+  select(uid, contains(c("s__Bifidobacterium_bifidum", "s__Bifidobacterium_breve", 
+                         "s__Bifidobacterium_longum", "s__Bifidobacterium_catenulatum",
+                         "s__Bifidobacterium_animalis", "s__Bacteroides_fragilis", 
+                         "s__Lactobacilus_casei", "s__Lactobacilus_acidophilus", 
+                         "s__Escherichia_coli", "s__Klebsiella_pneumoniae", 
+                         "s__Faecalibacterium_prausnitzii", "s__Ruminococcus_gnavus", 
+                         "s__Akkermansia_muciniphila"))) %>%
+  pivot_longer(-1, names_to = "species", values_to = "relab") %>%
+  separate(species, into = c(NA, "species"), sep = "s__") %>%
+  mutate(species = str_replace(species, "_", " ")) %>%
+  left_join(march_md, .) %>% rename(childAgeMonths = child_age_month, childGender = SEX)
+
+marchres_hmomet <- full_join(march_hmomet, res_hmomet)
+## the common columns between the two dataframes found during the join
+# Joining with `by = join_by(feedtype, eczema, feed_exposure, childAgeMonths, childGender, uid, filename,
+                           # S_well, cohort, species, relab)`
+
+
+plot2 <- marchres_hmomet %>%
+  filter(relab>0, !is.na(eczema)) %>%
+  ggplot(aes(x = species, y=relab, fill = eczema)) +
+  geom_boxplot() +
+  geom_point(alpha = 0.5, size = 0.5, 
+             position = position_jitterdodge(jitter.width = 0.3, 
+                                             dodge.width = 0.6, seed = 511)) +
+  labs(x=NULL, y = "Relative Abundance") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2), ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 7, face = "italic"),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 15))
 
 
 
-
-
-
-
-
-
+plot2
 #### Bray Curtis Distance and PERMANOVA ####
 
 ## RESONANCE
