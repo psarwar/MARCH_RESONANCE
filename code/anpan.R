@@ -461,7 +461,7 @@ marchres_pfams <- read_tsv("./raw_data_mixed/humann_pfams_joined.tsv") %>%
 
 ## Check and harmonize the filenames for humann kos outputs
 meta_file <- read.csv("./metadata_exports/marchres_combinedmd_ids.csv") %>% 
-  rename(sample_id = new_filename) %>%
+  rename(sample_id = old_filename) %>%
   mutate(eczema = case_when(eczema == "Yes" ~ TRUE,
                             eczema == "No" ~ FALSE)) %>%
   mutate(feedtype = factor(feedtype, levels = c("FormulaFed","Mixed","BreastFed"))) %>%
@@ -474,7 +474,7 @@ humann_samplenames <- colnames(marchres_pfams)
 sid_old_res <- meta_file %>%
   filter(old_seqname_res %in% humann_samplenames)
 col.from <- sid_old_res$old_seqname_res
-col.to <- sid_old_res$old_filename
+col.to <- sid_old_res$sample_id
 marchres_pfams <- marchres_pfams %>% rename_at(vars(col.from), ~col.to)
 
 ## Make the input files for all the HMO metabolizing bacteria
@@ -558,7 +558,6 @@ hmo_anpan <- anpan_batch(bug_dir = "./HMOstrains_pfams",
                          out_dir = "./anpan_humann_pfams",
                          filtering_method = 'kmeans',
                          model_type = 'fastglm',
-                         covariates = NA,
                          covariates = c('child_age_month', 'feedtype'),
                          outcome = 'eczema',
                          plot_ext = 'pdf',
